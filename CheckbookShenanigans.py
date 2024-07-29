@@ -86,7 +86,7 @@ class Income:
             # move the value to the right of it into Third Party Payments. Same for F and G. that should be it.
             else:
                 for value in row.values():
-                    ok, this is where I need to index the dictionary as I search it so that I can grab the value to the right
+                    ok, so this is where I need to index the dictionary as I search it so that I can grab the value to the right
 
 
 
