@@ -9,7 +9,9 @@ import csv
 class Income:
 
     def __init__(self, all_transactions):
-        """ Take in a checkbook object. Extracts only positive values into a list of dicts."""
+        """ Take in a checkbook object. Extracts only positive values into a list of dicts, with one dictionary
+            representing one row.
+        """
         self._data_list = []
         for row in all_transactions.get_data_list():
             if float(row['Amount']) > 0:
@@ -39,14 +41,13 @@ class Income:
             del row['Check No']
             del row['Category']
             for i in range(1, 7):
-                try: # sometimes there are fewer than 6 apparently
+                try:  # sometimes there are fewer than 6 apparently
                     del row['Split Category ' + str(i)]
                     del row['Split Amount ' + str(i)]
                     del row['Split Memo ' + str(i)]
                     del row['Split Class ' + str(i)]
                 except KeyError:
                     break
-
 
     def write_to_csv(self):
         column_titles = self.get_column_titles()
@@ -134,9 +135,53 @@ class Income:
                     else:
                         row['Third Party Payments'] = row['Amount']
 
+    def check_total_amount_column(self):
+        """
+        This is not a strictly necessary function. I just included it to check to make sure
+        the amounts in the category columns do in fact add up to the value in the Total Amount column.
+        If there is a discrepancy, a warning message is printed to the console specifying the problem row.
+        """
+        for row_num in range(len(self._data_list)):
+            row = self._data_list[row_num]
+            supposed_total = float(row['Total Amount'])
+            # All these try / except clauses are because '' throws a value error when you convert it to
+            #   float. So I have to manually change it to zero.
+            try:
+                copays_amount = float(row['Copays'])
+            except ValueError:
+                copays_amount = 0
+            try:
+                third_party_payments_amount = float(row['Third Party Payments'])
+            except ValueError:
+                third_party_payments_amount = 0
+            try:
+                refunds_received_amount = float(row['Refunds Received'])
+            except ValueError:
+                refunds_received_amount = 0
+            try:
+                transfers_received_amount = float(row['Transfers Received'])
+            except ValueError:
+                transfers_received_amount = 0
+            actual_total = (copays_amount +
+                            third_party_payments_amount +
+                            refunds_received_amount +
+                            transfers_received_amount)
+            if supposed_total != actual_total:
+                # Add two below to account for index starting at 0 and also the fact that row 1 is occupied by
+                #   column titles, not data.
+                print("Error in row " + str(row_num + 2) + ": 'Total Amount' column differs from actual total of income categories.")
+
 
 class Expenses:
     pass
+
+
+def is_number(string):
+    try:
+        float(string)
+        return True
+    except ValueError:
+        return False
 
 
 class InitialCheckbook:
@@ -182,6 +227,15 @@ class InitialCheckbook:
             row['Date'] = new_date_string
         # self.display()
 
+    def add_zeros(self):
+        for row_num in range(len(self._data_list)):
+            for key, val in self._data_list[row_num].items():
+                if is_number(val):
+                    if '.' not in val:
+                        self._data_list[row_num][key] = val + '.00'
+                    elif val[-2] == '.':
+                        self._data_list[row_num][key] = val + '0'
+
 
 def main():
     input_file = input("What file would you like to process?\nMake sure it is located in the same folder as this "
@@ -189,25 +243,24 @@ def main():
                        "include .csv at the end\n")
     # open up csv file, store in a list of dicts
     transactions = InitialCheckbook(input_file)
+    # add decimal points and zeros onto all numbers, so we don't have weird dollar amounts like '25' or '43.2'
+    transactions.add_zeros()
     # reformat dates into integers, this is required for both income and expenses
     transactions.dates_to_day_numbers()
     # split data into income and expenses
     income = Income(transactions)
     # take care of columns D, E, F, and G based on adjacent letter. makes new columns at the end.
     income.categorize_payments()
-    # rename columns
     income.rename_columns()
-    # remove extra columns
     income.remove_unnecessary_columns()
+    income.check_total_amount_column()
     # Write to csv
     income.write_to_csv()
 
     """
     income remaining tasks:
-        take care of yellow highlighted edge cases in excel file
-        maybe do a check to make sure total amount is actually the sum of the others
         go back through and add docstrings and comments
-        try to break it in a bunch of different ways
+        try to break it in a bunch of different ways? or just give it to mom with a warning on its robustness and assume later tweaks are needed.
             wrong file name
             ... brainstorm
         
