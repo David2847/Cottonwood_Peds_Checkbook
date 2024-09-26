@@ -173,7 +173,175 @@ class Income:
 
 
 class Expenses:
-    pass
+    """
+    MANY of the functions in here are going to be very similar to the ones in the Income class... the operations are very similar.
+    My starting point was to literally copy the Income class over into the Expenses class, then modify.
+    """
+
+    def __init__(self, all_transactions):
+        """ Take in a checkbook object. Extracts only negative values into a list of dicts, with one dictionary
+            representing one row.
+        """
+        self._data_list = []
+        for row in all_transactions.get_data_list():
+            if float(row['Amount']) < 0:
+                self._data_list.append(row)
+        # self.display()
+
+    def display(self):
+        """ Display the current data structure for testing purposes."""
+        for row in self._data_list:
+            print(row)
+
+    def rename_columns(self):
+        """ Renames column titles to their new names. Ignores columns to be deleted."""
+        # Mapping of old keys to new keys
+        key_mapping = {
+            'Amount': 'Total Amount',
+        }
+
+        # go through every key value pair in every row and rename if needed... not very efficient :(
+        for row_num in range(len(self._data_list)):
+            # Uses dictionary comprehension
+            new_row = {key_mapping.get(k, k): v for k, v in self._data_list[row_num].items()}
+            self._data_list[row_num] = new_row
+
+    def remove_unnecessary_columns(self):
+        for row in self._data_list:
+            del row['Check No']
+            del row['Category']
+            for i in range(1, 7):
+                try:  # sometimes there are fewer than 6 apparently
+                    del row['Split Category ' + str(i)]
+                    del row['Split Amount ' + str(i)]
+                    del row['Split Memo ' + str(i)]
+                    del row['Split Class ' + str(i)]
+                except KeyError:
+                    break
+
+    def write_to_csv(self):
+        column_titles = self.get_column_titles()
+
+        # name of csv file
+        filename = "income.csv"
+
+        # writing to csv file
+        with open(filename, 'w', newline='') as csvfile:
+            # creating a csv dict writer object
+            writer = csv.DictWriter(csvfile, fieldnames=column_titles)
+
+            # writing headers (field names)
+            writer.writeheader()
+
+            # writing data rows
+            writer.writerows(self._data_list)
+
+    def get_column_titles(self):
+        headers = []
+        for key in self._data_list[0].keys():
+            headers.append(key)
+        return headers
+
+    def add_columns(self):
+        for row in self._data_list:
+            row['Copays'] = ''
+            row['Third Party Payments'] = ''
+            row['Refunds Received'] = ''
+            row['Transfers Received'] = ''
+
+    def categorize_payments(self):
+        # four new columns: copays, third party payments, refunds received, transfers received
+        self.add_columns()
+
+        for row in self._data_list:
+            # if category column has D: Amount -> copays
+            if 'D' in row['Category']:
+                row['Copays'] = row['Amount']
+            # if category column has E: Amount -> Third Party Payments
+            elif 'E' in row['Category']:
+                row['Third Party Payments'] = row['Amount']
+            # if category column has D: Amount -> copays
+            elif 'F' in row['Category']:
+                row['Refunds Received'] = row['Amount']
+            # if category column has E: Amount -> Third Party Payments
+            elif 'G' in row['Category']:
+                row['Transfers Received'] = row['Amount']
+            # if category column is empty: that means the amount is split. iterate through row until finding a D.
+            # then move the value to the right of it into Copays. keep iterating through until finding an E. then
+            # move the value to the right of it into Third Party Payments. Same for F and G. This else statement
+            # also handles a weird edge case where there is no letter anywhere in the row. This means it is actually
+            # NOT a split payment and we need to look at the Payee information to decide if it should go in Copays
+            # or Third Party Payments.
+            else:
+                is_blank_field_edge_case = True
+                indexed_keys = list(row.keys())
+                # Iterate with index
+                for i in range(len(indexed_keys)):
+                    key = indexed_keys[i]
+                    if row[key] == 'D':
+                        next_key = indexed_keys[i + 1]
+                        split_amount = row[next_key]
+                        row['Copays'] = split_amount
+                        is_blank_field_edge_case = False
+                    elif row[key] == 'E':
+                        next_key = indexed_keys[i + 1]
+                        split_amount = row[next_key]
+                        row['Third Party Payments'] = split_amount
+                        is_blank_field_edge_case = False
+                    elif row[key] == 'F':
+                        next_key = indexed_keys[i + 1]
+                        split_amount = row[next_key]
+                        row['Refunds Received'] = split_amount
+                        is_blank_field_edge_case = False
+                    elif row[key] == 'G':
+                        next_key = indexed_keys[i + 1]
+                        split_amount = row[next_key]
+                        row['Transfers Received'] = split_amount
+                        is_blank_field_edge_case = False
+
+                if is_blank_field_edge_case:
+                    if 'Terminal' in row['Payee']:
+                        row['Copays'] = row['Amount']
+                    else:
+                        row['Third Party Payments'] = row['Amount']
+
+    def check_total_amount_column(self):
+        """
+        This is not a strictly necessary function. I just included it to check to make sure
+        the amounts in the category columns do in fact add up to the value in the Total Amount column.
+        If there is a discrepancy, a warning message is printed to the console specifying the problem row.
+        """
+        for row_num in range(len(self._data_list)):
+            row = self._data_list[row_num]
+            supposed_total = float(row['Total Amount'])
+            # All these try / except clauses are because '' throws a value error when you convert it to
+            #   float. So I have to manually change it to zero.
+            try:
+                copays_amount = float(row['Copays'])
+            except ValueError:
+                copays_amount = 0
+            try:
+                third_party_payments_amount = float(row['Third Party Payments'])
+            except ValueError:
+                third_party_payments_amount = 0
+            try:
+                refunds_received_amount = float(row['Refunds Received'])
+            except ValueError:
+                refunds_received_amount = 0
+            try:
+                transfers_received_amount = float(row['Transfers Received'])
+            except ValueError:
+                transfers_received_amount = 0
+            actual_total = (copays_amount +
+                            third_party_payments_amount +
+                            refunds_received_amount +
+                            transfers_received_amount)
+            if supposed_total != actual_total:
+                # Add two below to account for index starting at 0 and also the fact that row 1 is occupied by
+                #   column titles, not data.
+                print("Error in row " + str(row_num + 2) + ": 'Total Amount' column differs from actual total of income categories.")
+
+
 
 
 def is_number(string):
@@ -247,7 +415,7 @@ def main():
     transactions.add_zeros()
     # reformat dates into integers, this is required for both income and expenses
     transactions.dates_to_day_numbers()
-    # split data into income and expenses
+    # split data into income and expenses (expenses farther down)
     income = Income(transactions)
     # take care of columns D, E, F, and G based on adjacent letter. makes new columns at the end.
     income.categorize_payments()
@@ -257,9 +425,11 @@ def main():
     # Write to csv
     income.write_to_csv()
 
+    expenses = Expenses(transactions)
+
     """
     income remaining tasks:
-        go back through and add docstrings and comments
+        go back through and add docstrings and comments...
         try to break it in a bunch of different ways? or just give it to mom with a warning on its robustness and assume later tweaks are needed.
             wrong file name
             ... brainstorm
