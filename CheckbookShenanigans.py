@@ -188,16 +188,60 @@ class Expenses:
                 self._data_list.append(row)
         # self.display()
 
+    def flip_to_positive(self) -> None:
+        """ Flip all the negative values to positive."""
+        for d in self._data_list:
+            d['Amount'] = float(d['Amount']) * (-1)
+
     def display(self):
         """ Display the current data structure for testing purposes."""
         for row in self._data_list:
             print(row)
 
+    def flip_columns(self, col1 : str, col2 : str) -> None:
+        """
+        Flips the order of two columns in the list of dicts.
+        :param col1: string name of the first column.
+        :param col2: string name of the second column.
+        :return: Nothing, just reassign self._data_list to the newly created list of dicts.
+        """
+        new_list = []
+        for d in self._data_list:
+            new_dict = {}
+            for k in d:
+                if k == col1:
+                    new_dict[col2] = d[col2]
+                elif k == col2:
+                    new_dict[col1] = d[col1]
+                else:
+                    new_dict[k] = d[k]
+            new_list.append(new_dict)
+        self._data_list = new_list
+
     def rename_columns(self):
         """ Renames column titles to their new names. Ignores columns to be deleted."""
         # Mapping of old keys to new keys
         key_mapping = {
-            'Amount': 'Total Amount',
+            'Category': 'Officer\'s Comp (JJ)',
+            'Split Category 1': 'Salaries and Wages',
+            'Split Amount 1': 'Repairs and Maintenance',
+            'Split Memo 1': 'Rent',
+            'Split Class 1': 'Postage, Taxes, Licenses',
+            'Split Category 2': 'Interest',
+            'Split Amount 2': 'Depreciation',
+            'Split Memo 2': 'Advertising, Employee Relations, Public Relations',
+            'Split Class 2': 'Employee Benefits',
+            'Split Category 3': 'Supplies, Medications',
+            'Split Amount 3': 'Vaccines',
+            'Split Memo 3': 'Services, Independent Contracts',
+            'Split Class 3': 'Internet, Tel, Pagers',
+            'Split Category 4': 'CC fees, Bank fees',
+            'Split Amount 4': 'Subscriptions, Journals, Books, Ed Materials',
+            'Split Memo 4': 'Professional Dues, Membership Fees',
+            'Split Class 4': 'Insurance, Property',
+            'Split Category 5': 'Travel, Convention',
+            'Split Amount 5': 'Refunds paid out',
+            'Split Memo 5': 'Transfers',
         }
 
         # go through every key value pair in every row and rename if needed... not very efficient :(
@@ -208,22 +252,20 @@ class Expenses:
 
     def remove_unnecessary_columns(self):
         for row in self._data_list:
-            del row['Check No']
-            del row['Category']
-            for i in range(1, 7):
-                try:  # sometimes there are fewer than 6 apparently
-                    del row['Split Category ' + str(i)]
-                    del row['Split Amount ' + str(i)]
-                    del row['Split Memo ' + str(i)]
-                    del row['Split Class ' + str(i)]
-                except KeyError:
-                    break
+            try:
+                del row['Split Class 5']
+                del row['Split Category 6']
+                del row['Split Amount 6']
+                del row['Split Memo 6']
+                del row['Split Class 6']
+            except KeyError:
+                break
 
     def write_to_csv(self):
         column_titles = self.get_column_titles()
 
         # name of csv file
-        filename = "income.csv"
+        filename = "expenses.csv"
 
         # writing to csv file
         with open(filename, 'w', newline='') as csvfile:
@@ -426,6 +468,13 @@ def main():
     income.write_to_csv()
 
     expenses = Expenses(transactions)
+    expenses.flip_to_positive()
+    # expenses.categorize_payments()
+    expenses.flip_columns("Check No", "Payee")
+    expenses.rename_columns()
+    expenses.remove_unnecessary_columns()
+    # expenses.check_total_amount_column() probably delete this
+    expenses.write_to_csv()
 
     """
     income remaining tasks:
